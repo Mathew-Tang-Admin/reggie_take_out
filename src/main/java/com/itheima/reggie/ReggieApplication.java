@@ -20,6 +20,9 @@ public class ReggieApplication {
     }
 }
 
+// http://localhost:8080/front/page/login.html
+// http://localhost:8080/backend/index.html
+
 /*
 【黑马程序员Java项目实战《瑞吉外卖》，轻松掌握springboot + mybatis plus开发核心技术的真java实战项目】https://www.bilibili.com/video/BV13a411q753?p=82&vd_source=339999fb6210f92ee0f3e3bf990e51b2
 短信服务 将P82 day5-14
