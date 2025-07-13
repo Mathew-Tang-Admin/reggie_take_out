@@ -3,21 +3,23 @@ package com.itheima.reggie.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.itheima.reggie.common.CustomException;
+import com.itheima.reggie.controller.RedisConstant;
 import com.itheima.reggie.dto.DishDto;
 import com.itheima.reggie.entity.Dish;
 import com.itheima.reggie.entity.DishFlavor;
-import com.itheima.reggie.mapper.DishFlavorMapper;
 import com.itheima.reggie.mapper.DishMapper;
 import com.itheima.reggie.service.DishFlavorService;
 import com.itheima.reggie.service.DishService;
+import com.itheima.reggie.utils.ConvertObjUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -34,8 +36,12 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
     @Autowired
     private DishFlavorService dishFlavorService;
 
+    @Autowired
+    // private StringRedisTemplate redisTemplate;
+    private RedisTemplate<Object, Object> redisTemplate;
+
     /**
-     * TODO: 新增菜品，同时插入菜品对应的口味数据，需要操作两张表：dish、dish_flavor
+     * TODO: 新增菜品，同时插入菜品对应的口味数据，需要操作两张表：dish、dish_flavor（改用Redis缓存，mathewtang add）
      *
      * @param dishDto {@link DishDto}
      */
@@ -59,36 +65,66 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
 
         // 保存菜品口味数据到菜品口味表dish_flavor
         dishFlavorService.saveBatch(flavors);
+
+        // 将菜品信息保存到Redis缓存中
+        dishDto.setFlavors(flavors);
+        redisTemplate.opsForValue().set(RedisConstant.DISH_DETAIL + "_" + dishId, dishDto, 60, TimeUnit.MINUTES);
     }
 
     /**
-     * TODO: 根据id 查询菜品详细信息 以及 菜品口味信息
+     * TODO: 根据id 查询菜品详细信息 以及 菜品口味信息（改用Redis缓存，mathewtang add）
      *
      * @param id {@link Long} 菜品id
      * @return {@link DishDto}
      */
     @Override
     public DishDto getDetailByIdWithFlavor(Long id) {
-        // 查询菜品基本信息
-        Dish dish = this.getById(id);
 
-        DishDto dishDto = new DishDto();
-        BeanUtils.copyProperties(dish, dishDto); // 【源数据，目标】
+        // 根据id从Redis缓存中获取
+        String key = RedisConstant.DISH_DETAIL + "_" + id;
+        Object obj = redisTemplate.opsForValue().get(key);
 
-        // 添加条件构造器
-        LambdaQueryWrapper<DishFlavor> queryWrapper = new LambdaQueryWrapper<>();
-        // 添加一个过滤条件
-        queryWrapper.eq(DishFlavor::getDishId,id);
+        // Redis缓存中没有查到数据，从数据库中查询
+        DishDto dishDto = null;
+        if (null == obj) {
+            // 查询菜品基本信息
+            Dish dish = this.getById(id);
 
-        // 根据菜品id 从dish_flavor查询菜品口味信息
-        List<DishFlavor> list = dishFlavorService.list(queryWrapper);
-        dishDto.setFlavors(list);
+            dishDto = new DishDto();
+            BeanUtils.copyProperties(dish, dishDto); // 【源数据，目标】
 
-        return dishDto;
+            // 添加条件构造器
+            LambdaQueryWrapper<DishFlavor> queryWrapper = new LambdaQueryWrapper<>();
+            // 添加一个过滤条件
+            queryWrapper.eq(DishFlavor::getDishId,id);
+
+            // 根据菜品id 从dish_flavor查询菜品口味信息
+            List<DishFlavor> list = dishFlavorService.list(queryWrapper);
+            dishDto.setFlavors(list);
+
+            // 将菜品详细信息写入Redis缓存
+            redisTemplate.opsForValue().set(key, dishDto, 60, TimeUnit.MINUTES);
+
+            return dishDto;
+        }
+
+        // Redis缓存中有查到数据
+        // return convertToDto(obj, DishDto.class);
+        return ConvertObjUtil.convertObj(obj, DishDto.class);
     }
 
+    /* private static final ObjectMapper mapper = new ObjectMapper();
+
+    static {
+        mapper.registerModule(new JavaTimeModule());
+    }
+
+    private static <T> T convertToDto(Object obj, Class<T> targetType) {
+        return mapper.convertValue(obj, targetType);
+    } */
+
     /**
-     * TODO: 修改菜品详细信息 以及 菜品口味信息
+     * TODO: 修改菜品详细信息 以及 菜品口味信息（改用Redis缓存，mathewtang add）
      *
      * @param dishDto {@link DishDto}
      */
@@ -119,12 +155,21 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
             item.setDishId(dishId);
             return item;
         }).collect(Collectors.toList());
-        boolean saveDishFlavor = dishFlavorService.saveBatch(dishDto.getFlavors());
+        // boolean saveDishFlavor = dishFlavorService.saveBatch(dishDto.getFlavors());  // 咋感觉用这个，上面那一串代码就没用了嘞
+        boolean saveDishFlavor = dishFlavorService.saveBatch(flavors); // 后改
+
+        // 将菜品信息保存到Redis缓存中
+        dishDto.setFlavors(flavors);
+        String key = RedisConstant.DISH_DETAIL + "_" + dishId;
+        // 删除旧的dish_detail
+        redisTemplate.delete(key);
+        // 更新dish_detail
+        redisTemplate.opsForValue().set(key, dishDto, 60, TimeUnit.MINUTES);
 
     }
 
     /**
-     * TODO: 批量删除菜品 以及菜品口味
+     * TODO: 批量删除菜品 以及菜品口味（改用Redis缓存，mathewtang add）
      *
      * @param ids {@link String}
      * @return {@link boolean}
@@ -161,6 +206,20 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
         LambdaQueryWrapper<DishFlavor> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.in(DishFlavor::getDishId, ids);
         boolean removeFlavor = dishFlavorService.remove(queryWrapper);
+
+        // 删除缓存中分类商品，以及菜品详情
+        for (Dish dish : dishList) {
+            // 删除菜品分类
+            String categoryKey = "dish_" + dish.getCategoryId() + "_1";
+            Object o = redisTemplate.opsForValue().get(categoryKey);
+            if (null != o) {
+                redisTemplate.delete(categoryKey);
+            }
+            // 删除菜品详情
+            String dishKey = RedisConstant.DISH_DETAIL + "_" + dish.getId();
+            redisTemplate.delete(dishKey);
+        }
+
         return removeDish && removeFlavor;
 
     }

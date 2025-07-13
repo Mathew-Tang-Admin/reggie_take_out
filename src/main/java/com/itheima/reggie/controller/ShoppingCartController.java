@@ -36,10 +36,13 @@ public class ShoppingCartController {
     public R<List<ShoppingCart>> list(HttpSession session) {
         log.info("查看购物车...");
 
+        // 这里我发现了一个问题，如果先登录管理员端，然后再登录移动端，上下文存储的是管理员的id，这个时候，这里是查不到移动端用户的购物车数据
+
         Long userId = Long.parseLong(session.getAttribute("user").toString());
 
         LambdaQueryWrapper<ShoppingCart> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(ShoppingCart::getUserId, BaseContext.getCurrentId());
+        // queryWrapper.eq(ShoppingCart::getUserId, BaseContext.getCurrentId());
+        queryWrapper.eq(ShoppingCart::getUserId, userId);
         queryWrapper.orderByAsc(ShoppingCart::getCreateTime);
 
         List<ShoppingCart> list = shoppingCartService.list(queryWrapper);

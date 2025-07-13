@@ -15,14 +15,14 @@ public interface DishService extends IService<Dish> {
 
 
     /**
-     * TODO: 新增菜品，同时插入菜品对应的口味数据，需要操作两张表：dish、dish_flavor
+     * TODO: 新增菜品，同时插入菜品对应的口味数据，需要操作两张表：dish、dish_flavor（改用Redis缓存）
      *
      * @param dishDto {@link DishDto}
      */
     void saveWithFlavor(DishDto dishDto);
 
     /**
-     * TODO: 根据id 查询菜品详细信息 以及 菜品口味信息
+     * TODO: 根据id 查询菜品详细信息 以及 菜品口味信息（改用Redis缓存）
      *
      * @param id {@link Long} 菜品id
      * @return {@link DishDto}

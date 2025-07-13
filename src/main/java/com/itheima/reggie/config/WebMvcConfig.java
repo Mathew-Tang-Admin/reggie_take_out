@@ -1,5 +1,7 @@
 package com.itheima.reggie.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.itheima.reggie.common.JacksonObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
@@ -42,6 +44,23 @@ public class WebMvcConfig extends WebMvcConfigurationSupport {
         messageConverter.setObjectMapper(new JacksonObjectMapper());
         // 将上面的消息转换器追加到mvc框架的转换器集合中
         converters.add(0,messageConverter);
+    }
+
+
+    /**
+     * TODO: 强制替换默认的 Jackson 消息转换器，并启用对 LocalDateTime 的支持
+     *     mathewtang add
+     * @param converters {@link HttpMessageConverter<?>>}
+     */
+    @Override
+    public void configureMessageConverters(List<HttpMessageConverter<?>> converters) {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+
+        MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
+        converter.setObjectMapper(mapper);
+
+        converters.add(0, converter);
     }
 }
 

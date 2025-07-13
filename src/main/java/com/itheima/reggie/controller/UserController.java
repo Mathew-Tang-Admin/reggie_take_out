@@ -12,6 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.apache.tomcat.util.buf.UDecoder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpSession;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author MathewTang
@@ -32,8 +35,12 @@ public class UserController {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    // private RedisTemplate<Object, Object> redisTemplate;
+    private StringRedisTemplate redisTemplate;
+
     /**
-     * TODO: 发送手机短信验证码
+     * TODO: 发送手机短信验证码（改用Redis缓存）
      *
      * @param user {@link User}
      * @return {@link R<String>}
@@ -54,7 +61,10 @@ public class UserController {
             // SMSUtils.sendMessage("瑞吉外卖", "", phone, code);
 
             // 将生成的验证码保存到Session
-            session.setAttribute(phone, code);
+            session.setAttribute(phone, code);   // 改用缓存后，可注释
+
+            // 将验证码写入Redis缓存，有效期5分钟
+            redisTemplate.opsForValue().set(phone, code, 5, TimeUnit.MINUTES);
             return R.success("手机验证码短信发送成功");
         }
         return R.error("手机验证码短信发送失败");
@@ -62,6 +72,13 @@ public class UserController {
 
     }
 
+    /**
+     * TODO: 移动端手机登录（改用Redis缓存）
+     *
+     * @param map {@link String}
+     * @param session {@link String>}
+     * @return {@link R<User>}
+     */
     @PostMapping("/login")
     // public R<String> login(@RequestBody User user, HttpSession session) {
     public R<User> login(@RequestBody Map<String, String> map, HttpSession session) {
@@ -75,7 +92,10 @@ public class UserController {
         String code = map.get("code");
         log.info("移动端手机登录，手机号={}, code={}...", phone, code);
         // 从session中获取保存的验证码
-        String sessionCode = session.getAttribute(phone).toString();
+        // String sessionCode = session.getAttribute(phone).toString();
+
+        // 从Redis缓存中获取验证码
+        String sessionCode = redisTemplate.opsForValue().get(phone);
 
         // 对比两个验证码是否一致
         if (sessionCode != null && sessionCode.equals(code)) {
@@ -90,7 +110,13 @@ public class UserController {
                 userService.save(user);
             }
             session.setAttribute("user", user.getId());
+
+            // 如果登录成功，则将验证码从Redis缓存中删除
+            redisTemplate.delete(phone);
+
             return R.success(user);
+        } else if (null == sessionCode) {
+            return R.error("验证码已过期，请重新获取！");
         }
 
         return R.error("短信发送失败");
