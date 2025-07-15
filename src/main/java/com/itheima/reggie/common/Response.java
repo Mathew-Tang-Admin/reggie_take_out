@@ -5,11 +5,13 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
+
 @NoArgsConstructor
 @AllArgsConstructor
 @Data
 @Builder
-public class Response<T> {
+public class Response<T> implements Serializable {
 
     private int code; // 响应的状态码
     private String msg; // 响应的消息

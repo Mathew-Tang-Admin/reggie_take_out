@@ -14,10 +14,19 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -42,6 +51,20 @@ public class SetMealController {
     @Autowired
     private CategoryService categoryService;
 
+    @Autowired
+    private CacheManager cacheManager;
+    @Autowired
+    private RedisTemplate<Object, Object> redisTemplate;
+
+    /**
+     * TODO: mathewtang add
+     *
+     * @param page {@link Integer}
+     * @param pageSize {@link Integer}
+     * @param name {@link String}
+     * @return {@link R<Page<SetmealDto>>}
+     */
+    @Cacheable(value = "setMealCache", key = "'page_' + #page + '_' + #pageSize + '_' + #name")
     @GetMapping("/page")
     public R<Page<SetmealDto>> page(Integer page, Integer pageSize, String name) {
         log.info("套餐分页查询，page={},pageSize={}", page, pageSize);
@@ -83,25 +106,51 @@ public class SetMealController {
     }
 
     /**
-     * TODO: 批量修改套餐状态
-     *
+     * TODO: 批量修改套餐状态      (mathewtang add)
+     *     list缓存、page缓存、套餐缓存删除
      * @param status {@link Integer}
      * @param ids {@link String}
      * @return {@link R<String>}
      */
     @PostMapping("/status/{status}")
-    public R<String> status(@PathVariable("status") Integer status, String ids) {
+    // public R<String> status(@PathVariable("status") Integer status, String ids) {
+    public R<String> status(@PathVariable("status") Integer status, @RequestParam("ids") List<Long> ids) {
         log.info("根据id 批量修改套餐状态，ids={},status={}",ids,status);
 
-        List<String> idList = Arrays.asList(ids.split(","));
+        // List<String> idList = Arrays.asList(ids.split(","));
         LambdaUpdateWrapper<Setmeal> updateWrapper = new LambdaUpdateWrapper<Setmeal>()
-                .in(Setmeal::getId, idList)
+                // .in(Setmeal::getId, idList)
+                .in(Setmeal::getId, ids)
                 // 如 我要停售 菜品 但是ids 对应的菜品已经有状态为停售的菜品 这些菜品就不需要再将他的状态变为停售了
                 .eq(Setmeal::getStatus, status == 1? 0 : 1)
                 .set(Setmeal::getStatus, status);
         boolean update = setMealService.update(updateWrapper);
 
         if (update) {
+
+            String prefix= "setMealCache::";
+            Cache cache = cacheManager.getCache("setMealCache");
+            if (null != cache) {
+                // 删除套餐缓存
+                for (Long id : ids) {
+                    cache.evict(id);
+                }
+                // 删除list缓存
+                Set<Object> listKeys = redisTemplate.keys(prefix + "list*");
+                if (listKeys != null) {
+                    for (Object listKey : listKeys) {
+                        redisTemplate.delete(listKey);
+                    }
+                }
+                // 删除page
+                Set<Object> pageKeys = redisTemplate.keys(prefix + "page*");
+                for (Object pageKey : pageKeys) {
+                    redisTemplate.delete(pageKey);
+                }
+
+            }
+
+
             return R.success("批量修改套餐状态成功");
         }
 
@@ -110,10 +159,11 @@ public class SetMealController {
 
     /**
      * TODO: 批量删除套餐 并将关联的菜品关系删除【注意：不是删除菜品】
-     *
+     *     删除 分页缓存 和 list缓存 以及 套餐缓存【因为SpringCache不支持模糊匹配，只好手动删除了】
      * @param ids {@link String}
      * @return {@link R<String>}
      */
+    // @CacheEvict(value = "setMealCache", allEntries = true)   // 老师是这么实现的
     @DeleteMapping
     // public R<String> delete(String ids) {
     public R<String> delete(@RequestParam("ids") List<Long> ids) {
@@ -122,6 +172,30 @@ public class SetMealController {
         boolean flag = setMealService.removeByIdsWithDish(ids);
 
         if (flag) {
+
+            String prefix= "setMealCache::";
+            Cache cache = cacheManager.getCache("setMealCache");
+            if (cache != null) {
+                // 删除套餐缓存
+                for (Long id : ids) {
+                    cache.evict(id);
+                }
+                Set<Object> listSet = redisTemplate.keys(prefix + "list*");
+                // 删除list缓存
+                if (listSet != null) {
+                    listSet.forEach(list -> {
+                        redisTemplate.delete(list);
+                    });
+                }
+                Set<Object> pageKeys = redisTemplate.keys(prefix + "page*");
+                // 删除分页缓存
+                if (pageKeys != null) {
+                    for (Object pageKey : pageKeys) {
+                        redisTemplate.delete(pageKey);
+                    }
+                }
+            }
+
             return R.success("批量删除套餐成功");
         }
         return R.error("批量删除套餐失败");
@@ -129,10 +203,22 @@ public class SetMealController {
 
     /**
      * TODO: 添加套餐 并添加关联的菜品关系
+     *     将管理端分页查询缓存删除   移动端list缓存删除
+     *     这里要注意的是 key 不支持 模糊匹配
+     *     如果想要实现也可以选择 注解 + redisTemplate组合的方式
      *
+     * TODO:
+     *     我这里想尝试redisTemplate删除旧的缓存，注解插入新的缓存，通过资料查询，所得，完全可以实现，不用担心执行顺序的问题，他会先执行方法体的代码，再执行注解的代码
      * @param setmealDto {@link SetmealDto}
      * @return {@link R<String>}
      */
+    @Caching(
+            // evict = {@CacheEvict(value = "setMealCache", allEntries = true)},   // 老师是这么实现的
+            evict = { // 即使又两条，也可以加上
+                    // @CacheEvict(value = "setMealCache", key = "'list_' + #setmealDto.categoryId + '_1'", beforeInvocation = true),
+                    @CacheEvict(value = "setMealCache", key = "'list_' + #setmealDto.categoryId + '_1'", beforeInvocation = true),
+            }
+    )
     @PostMapping
     public R<String> save(@RequestBody SetmealDto setmealDto) {
         log.info("添加套餐 并添加关联的菜品关系，setmealDto={}",setmealDto);
@@ -140,15 +226,29 @@ public class SetMealController {
         // 添加菜品的时候 注意 状态为停售的菜品，如果不筛选，可以直接选择不展示这些菜品
         setMealService.saveSetMealWithDish(setmealDto);
 
-        return R.success("批量删除套餐成功");
+        // 删除分页缓存
+        String prefix= "setMealCache::";
+        Set<Object> pageKeys = redisTemplate.keys(prefix + "page*");
+        if (pageKeys != null) {
+            pageKeys.forEach(pageKey -> {
+                redisTemplate.delete(pageKey);
+            });
+        }
+
+        // 将套餐数据加入缓存
+        redisTemplate.opsForValue().set(prefix + setmealDto.getId(), setmealDto, 60, TimeUnit.MINUTES);
+
+        return R.success("添加套餐成功");
     }
 
     /**
-     * TODO: 根据id查询 套餐详细信息 以及关联的菜品关系
+     * TODO: 根据id查询 套餐详细信息 以及关联的菜品关系     (mathewtang add)
+     * )
      *
      * @param id {@link Long}
      * @return {@link R<String>}
      */
+    @Cacheable(value = "setMealCache", key = "#id")
     @GetMapping("{id}")
     public R<SetmealDto> getDetail(@PathVariable("id") Long id) {
         log.info("根据id查询 套餐详细信息 以及关联的菜品关系，id={}",id);
@@ -162,11 +262,18 @@ public class SetMealController {
     }
 
     /**
-     * TODO: 更新 套餐详细信息 以及关联的菜品关系
-     *
+     * TODO: 更新 套餐详细信息 以及关联的菜品关系         (mathewtang add)
+     *     ${@code beforeInvocation = true} 将注解的执行时机修改为方法执行前
+     *     list缓存、page分页缓存、套餐缓存 删除  插入新的缓存
      * @param setmealDto {@link SetmealDto}
      * @return {@link R<String>}
      */
+    @Caching(
+            evict = {
+                    @CacheEvict(value = "setMealCache", key = "#setmealDto.id", beforeInvocation = true),
+                    @CacheEvict(value = "setMealCache", key = "'list_' + #setmealDto.categoryId + '_1'"),
+            } // , beforeInvocation = true
+    )
     @PutMapping
     public R<String> update(@RequestBody SetmealDto setmealDto) {
         log.info("更新 套餐详细信息 以及关联的菜品关系，setmealDto={}",setmealDto);
@@ -174,6 +281,16 @@ public class SetMealController {
         boolean flag = setMealService.updateWithDish(setmealDto);
 
         if (flag) {
+
+            String prefix= "setMealCache::";
+            // 删除分页缓存
+            Set<Object> pageKeys = redisTemplate.keys(prefix + "page*");
+            for (Object pageKey : pageKeys) {
+                redisTemplate.delete(pageKey);
+            }
+            // 插入新的套餐缓存
+            redisTemplate.opsForValue().set(prefix + setmealDto.getId(), setmealDto, 60, TimeUnit.MINUTES);
+
             return R.success("更新套餐成功");
         }
         return R.error("更新套餐失败");
@@ -185,6 +302,7 @@ public class SetMealController {
      * @param setmeal {@link Setmeal}
      * @return {@link R<List<Setmeal>>}
      */
+    @Cacheable(value = "setMealCache", key = "'list_'+ #setmeal.categoryId + '_' + #setmeal.status")
     @GetMapping("list")
     // public R<List<Setmeal>> list(@RequestParam("categoryId") Long categoryId, @RequestParam("status") Integer status) {
     public R<List<Setmeal>> list(Setmeal setmeal) {
@@ -205,11 +323,12 @@ public class SetMealController {
     }
 
     /**
-     * TODO: 根据 套餐id 查询包含的菜品
+     * TODO: 根据 套餐id 查询包含的菜品       (mathewtang add)
      *
      * @param id {@link Long}
      * @return {@link R<SetmealDish>}
      */
+    @Cacheable(value = "setMealCache", key = "#id + '_contain_dish'")
     @GetMapping("/dish/{id}")
     public R<List<Dish>> list(@PathVariable("id") Long id) {
         log.info("根据 套餐id 查询包含的菜品，id={}",id);

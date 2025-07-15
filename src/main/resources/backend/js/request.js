@@ -45,7 +45,10 @@
 
   // 响应拦截器
   service.interceptors.response.use(res => {
-      if (res.data.code === 0 && res.data.msg === 'NOTLOGIN') {// 返回登录页面
+      console.log('---响应拦截器---',res)
+      console.log('res.data------------', res.data)
+      if (res.data.code === 0 && res.data.msg === 'NOTLOGIN') {// 返回登录页面,老师默认的
+        // 我看它响应的消息是这样的：     {"code":0,"map":{},"msg":"NOTLOGIN"}   我又检查了一下，这个数据是封装在res.data里的
         console.log('---/backend/page/login/login.html---')
         localStorage.removeItem('userInfo')
         window.top.location.href = '/backend/page/login/login.html'

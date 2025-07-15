@@ -1,5 +1,6 @@
-package com.itheima.reggie.controller;
+package com.itheima.reggie.common;
 
+import com.itheima.reggie.controller.DishController;
 import com.itheima.reggie.dto.DishDto;
 
 /**
