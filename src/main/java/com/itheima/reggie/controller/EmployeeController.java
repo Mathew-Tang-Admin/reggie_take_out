@@ -11,12 +11,21 @@ import com.itheima.reggie.service.EmployeeService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.net.ssl.HandshakeCompletedEvent;
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author MathewTang
@@ -27,6 +36,11 @@ import java.time.LocalDateTime;
 public class EmployeeController {
     @Autowired
     private EmployeeService employeeService;
+
+    @Autowired
+    private CacheManager cacheManager;
+    @Autowired
+    private RedisTemplate<Object, Object> redisTemplate;
 
     /**
      * TODO: 员工登陆
@@ -83,7 +97,8 @@ public class EmployeeController {
 
     /**
      * TODO: 添加员工
-     *
+     *     删除分页缓存、增加新的缓存          如果为了实现更加简单可以只是用 id 作为key
+     *     突然发现这里使用 @CachePut注解 即可  【脑壳抽了😂】
      * @param request {@link HttpServletRequest}
      * @return {@link R<String>}
      */
@@ -122,6 +137,21 @@ public class EmployeeController {
         // employee.setUpdateUser(empId);
 
         boolean save = employeeService.save(employee);
+
+        System.out.println("employee.getId() = " + employee.getId());
+
+        // 删除分页缓存
+        String prefix= "employeeCache::";
+        Set<Object> pageKeys = redisTemplate.keys(prefix + "page*");
+        if (pageKeys != null) {
+            for (Object pageKey : pageKeys) {
+                redisTemplate.delete(pageKey);
+            }
+        }
+        // 新增员工缓存
+        redisTemplate.opsForValue().set(prefix + "detail_" + employee.getId(), employee, 60, TimeUnit.MINUTES);
+        redisTemplate.opsForValue().set(prefix + "detail_" + employee.getUsername(), employee, 60, TimeUnit.MINUTES);
+
         return R.success("新增员工成功");
     }
 
@@ -133,6 +163,7 @@ public class EmployeeController {
      * @param name     {@link String}
      * @return {@link R<Page>}
      */
+    @Cacheable(value = "employeeCache", key = "'page_' + #page + '_' + #pageSize + '_' + #name")
     @GetMapping("/page")
     // public R<Page> page(@RequestParam("page") Integer page,
     public R<Page> page(Integer page, Integer pageSize, String name) {
@@ -155,32 +186,92 @@ public class EmployeeController {
 
     /**
      * TODO: 根据id修改员工信息 禁用启用员工账号
+     *     删除分页缓存，删除账户缓存、新增缓存
+     *     为了解决修改了 username 导致旧的缓存未删除，只能在更新前执行查询    或者为了方便 也可以删除全部缓存
      * @return {@link R<String>}
      */
+    @Caching(
+            evict = {
+                    @CacheEvict(value = "employeeCache", key = "'detail_' + #employee.username", beforeInvocation = true),
+                    @CacheEvict(value = "employeeCache", key = "'detail_' + #employee.id", beforeInvocation = true)
+            }
+    )
     @PutMapping
     public R<String> update(HttpServletRequest request, @RequestBody Employee employee) {
         long threadId = Thread.currentThread().getId();
 
         log.info(" 员工信息 线程Id：{}  employee:{}",threadId,employee);
 
+        // 查询执行更新前的username，通过username查询缓存，如果未改，这里应该是没有查到缓存    或者禁用启用账号时也需要
+        Employee employeeById = employeeService.getById(employee.getId());
+        String usernameKey = "employeeCache::detail_" + employeeById.getUsername();
+        Employee employeeRedis = (Employee) redisTemplate.opsForValue().get(usernameKey);
+        if (null != employeeRedis) {
+            redisTemplate.delete(usernameKey);                 // 或者为了方便也可以直接只用id作为key    这里蛮保存吧...
+        }
+
         Long empId = (Long) request.getSession().getAttribute("employee");
         // employee.setUpdateTime(LocalDateTime.now());
         // employee.setUpdateUser(empId);
         employeeService.updateById(employee);
+
+        String prefix = "employeeCache::";
+        // 删除分页缓存
+        Set<Object> pageKeys = redisTemplate.keys(prefix + "page*");
+        if (pageKeys != null) {
+            for (Object pageKey : pageKeys) {
+                redisTemplate.delete(pageKey);
+            }
+        }
+        // 新增员工缓存
+        if (employee.getUsername() != null) {      // 不然会有   detail_null 或者其他值没有数据
+            redisTemplate.opsForValue().set(prefix + "detail_" + employee.getUsername(), employee, 60, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set(prefix + "detail_" + employee.getId(), employee, 60, TimeUnit.MINUTES);
+        }
 
         return R.success("员工信息修改成功");
     }
 
     /**
      * TODO: 根据id查询员工详细信息
+     *     通过查询资料得，再增加一个key为 id 的缓存更高效
+     *     由于前面员工数据都是 未包装 的，这个也应该是为包装的吧？？
      * @return {@link R<Employee>}
      */
+    // @Cacheable(value = "cacheManager", key = "'detail_' + #id")       // 为了统一结构，只能手动实现
     @GetMapping("/{id}")
     public R<Employee> employee(@PathVariable("id") Long id) {
         log.info("根据id查询员工详细信息...");
-        Employee emp = employeeService.getById(id);
-        if (emp != null) {
-            return R.success(emp);
+
+        // 获取缓存数据
+        String prefix = "employeeCache::";
+        /* Set<Object> empKeys = redisTemplate.keys(prefix + "detail_*");
+        if (empKeys != null) {
+            for (Object empKey : empKeys) {
+                Employee employee = (Employee) redisTemplate.opsForValue().get(empKey);
+                if (employee != null && id.equals(employee.getId())) {
+                    return R.success(employee);
+                }
+            }
+        } */
+        Cache cache = cacheManager.getCache("employeeCache");
+        Employee employee = null;
+        if (cache != null) {
+            employee = cache.get("detail_" + id, Employee.class);
+            if (null != employee) {
+                return R.success(employee);
+            }
+        }
+
+        // 缓存中没有数据
+        employee = employeeService.getById(id);
+        if (employee != null) {
+            // 新增员工缓存
+            // redisTemplate.opsForValue().set(prefix + "detail_" + employee.getUsername(), employee, 60, TimeUnit.MINUTES);
+
+            redisTemplate.opsForValue().set(prefix + "detail_" + employee.getUsername(), employee, 60, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set(prefix + "detail_" + employee.getId(), employee, 60, TimeUnit.MINUTES);
+            return R.success(employee);
         }
         return R.error("没有查询到对应员工信息");
     }

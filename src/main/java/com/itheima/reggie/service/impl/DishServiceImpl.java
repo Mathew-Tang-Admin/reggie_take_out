@@ -10,7 +10,7 @@ import com.itheima.reggie.entity.DishFlavor;
 import com.itheima.reggie.mapper.DishMapper;
 import com.itheima.reggie.service.DishFlavorService;
 import com.itheima.reggie.service.DishService;
-import com.itheima.reggie.utils.ConvertObjUtil;
+import com.itheima.reggie.utils.RedisUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -110,7 +110,7 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
 
         // Redis缓存中有查到数据
         // return convertToDto(obj, DishDto.class);
-        return ConvertObjUtil.convertObj(obj, DishDto.class);
+        return RedisUtil.convertObj(obj, DishDto.class);
     }
 
     /* private static final ObjectMapper mapper = new ObjectMapper();

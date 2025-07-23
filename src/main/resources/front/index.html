@@ -272,6 +272,10 @@
             },
             goodsPrice(){
               let price = 0
+              // console.log(JSON.parse(JSON.stringify(this.cartData)))// 因为后端我使用了JSON序列化器，传过来的数据是JSON对象，而它需要的是数组，无法解析，所以修改成这样
+              // this.cartData = Array.isArray(this.cartData) ? this.cartData : [this.cartData]
+              console.log("goodsPrice ", this.cartData)
+
               this.cartData.forEach(item=>{
                 price += (item.number * item.amount)
               })
@@ -312,7 +316,12 @@
                 }
                 //获取菜品数据
                 if(res[1].code === 1){
-                this.cartData = res[1].data
+                  // this.cartData = res[1].data
+
+                  // 在获取购物车数据代码做了更改，因此这里也要对应更改
+                  console.log(res[1].data)
+                  this.cartData = Array.isArray(res[1].data) ? res[1].data : [res[1].data];
+
                 }else{
                   this.$notify({ type:'warning', message:res[1].msg});
                 }
@@ -377,8 +386,13 @@
             //获取购物车数据
             async getCartData(){
               const res = await cartListApi({})
+              console.log("获取购物车数据", res)
               if(res.code === 1){
-                this.cartData = res.data
+                // this.cartData = res.data
+                console.log(res.data)
+
+                // 因为后端我使用了JSON序列化器，传过来的数据是JSON对象，而它需要的是数组，无法解析，所以修改成这样
+                this.cartData = Array.isArray(res.data) ? res.data : [res.data]
               }else{
                 this.$notify({ type:'warning', message:res.msg});
               }

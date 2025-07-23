@@ -53,18 +53,25 @@ public class UserController {
         String phone = user.getPhone();
 
         if (StringUtils.isNotEmpty(phone)) {
-            // 生成随机四位验证码
-            String code = ValidateCodeUtils.generateValidateCode(4).toString();
+
+            // 从缓存中获取验证码
+            String code = redisTemplate.opsForValue().get(phone);
+
+            if (null == code) {
+                // 生成随机四位验证码
+                code = ValidateCodeUtils.generateValidateCode(4).toString();
+                // log.info("移动端手机发送短信，手机号={}, code={}...", phone, code);
+
+                // 调用阿里云提供的短信服务API完成
+                // SMSUtils.sendMessage("瑞吉外卖", "", phone, code);
+
+                // 将生成的验证码保存到Session
+                session.setAttribute(phone, code);   // 改用缓存后，可注释
+
+                // 将验证码写入Redis缓存，有效期5分钟
+                redisTemplate.opsForValue().set(phone, code, 5, TimeUnit.MINUTES);
+            }
             log.info("移动端手机发送短信，手机号={}, code={}...", phone, code);
-
-            // 调用阿里云提供的短信服务API完成
-            // SMSUtils.sendMessage("瑞吉外卖", "", phone, code);
-
-            // 将生成的验证码保存到Session
-            session.setAttribute(phone, code);   // 改用缓存后，可注释
-
-            // 将验证码写入Redis缓存，有效期5分钟
-            redisTemplate.opsForValue().set(phone, code, 5, TimeUnit.MINUTES);
             return R.success("手机验证码短信发送成功");
         }
         return R.error("手机验证码短信发送失败");

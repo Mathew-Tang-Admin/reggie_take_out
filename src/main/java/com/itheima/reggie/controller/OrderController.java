@@ -13,11 +13,18 @@ import com.itheima.reggie.service.AddressBookService;
 import com.itheima.reggie.service.OrderDetailService;
 import com.itheima.reggie.service.OrderService;
 import com.itheima.reggie.service.ShoppingCartService;
+import com.itheima.reggie.utils.RedisUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -39,29 +46,41 @@ public class OrderController {
     @Autowired
     private OrderDetailService orderDetailService;
 
+    @Autowired
+    private CacheManager cacheManager;
+    // @Resource(name = "objRedisTemplate")
+    @Autowired
+    private RedisTemplate<Object, Object> redisTemplate;
+
     /**
-     * TODO: 用户下单
-     *
+     * TODO: 用户下单      (mathewtang 改用SpringCache)
+     *     删除购物车缓存数据、删除userPage数据、删除page数据
      * @param orders {@link Orders}
      * @param session {@link HttpSession}
      * @return {@link R<Orders>}
      */
+    @CacheEvict(value = "shoppingCartCache", key = "'cart_list_' + #session.getAttribute('user').toString()")
     @PostMapping("/submit")
     public R<String> submit(@RequestBody Orders orders, HttpSession session) {
         log.info("提交订单，orders={}..", orders);
 
         orderService.submit(orders);
 
+        String userId = session.getAttribute("user").toString();
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, "ordersCache::page");
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, "ordersCache::userPage_user_" + userId);
+
         return R.success("下单成功");
     }
 
 
     /**
-     * TODO: 订单分页查询
+     * TODO: 订单分页查询      (mathewtang 改用SpringCache)
      *
      * @param session {@link HttpSession}
      * @return {@link R<Page<Orders>>}
      */
+    @Cacheable(value = "ordersCache", key = "'page_' + #page + '_' + #pageSize + '_number_' + #number + '_beginTime_' + #beginTime + '_endTime_' + #endTime")
     @GetMapping("/page")
     public R<Page<Orders>> page(Integer page, Integer pageSize,
                                 @RequestParam(value = "number", required = false) Long number,
@@ -83,10 +102,11 @@ public class OrderController {
 
     /**
      * TODO: 移动端 订单页面，分页查询，并查询订单中包含的 商品
-     *
+     *       (mathewtang 改用SpringCache)
      * @param session {@link HttpSession}
      * @return {@link R<Page<OrderDto>>}
      */
+    @Cacheable(value = "ordersCache", key = "'userPage_user_' + #session.getAttribute('user').toString() + '_' + #page + '_' + #pageSize")
     @GetMapping("/userPage")
     public R<Page<OrderDto>> userPage(Integer page, Integer pageSize, HttpSession session) {
         log.info("移动端 订单页面，分页查询");
@@ -115,8 +135,8 @@ public class OrderController {
 
 
     /**
-     * TODO: 管理端 修改订单状态
-     *
+     * TODO: 管理端 修改订单状态      (mathewtang 改用SpringCache)
+     *     删除page分页缓存、删除userPage分页缓存
      *
      * @param session {@link HttpSession}
      * @return {@link R<AddressBook>}
@@ -129,6 +149,12 @@ public class OrderController {
         queryWrapper.eq(Orders::getId, orders.getId());
 
         boolean update = orderService.updateById(orders);
+
+        // 删除page分页缓存
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, "ordersCache::page");
+        // 删除userPage分页缓存
+        String userId = session.getAttribute("user").toString();
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, "ordersCache::userPage_user_" + userId);
 
         return R.success("管理端 修改订单状态成功");
     }

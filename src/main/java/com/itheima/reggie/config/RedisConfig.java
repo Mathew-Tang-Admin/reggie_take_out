@@ -44,8 +44,8 @@ public class RedisConfig extends CachingConfigurerSupport {
 
     /**
      * TODO:
-     *     ${@code @Primary} 设置为默认的Redis管理器
-     *     ${@code @CacheEvict(cacheManager = "", value = "userCache", key = "#id")} 或者可以这么使用
+     *     {@code @Primary} 设置为默认的Redis管理器
+     *     {@code @CacheEvict(cacheManager = "", value = "userCache", key = "#id")} 或者可以这么使用
      *
      * @param factory {@link RedisConnectionFactory}
      * @return {@link RedisCacheManager}
@@ -72,7 +72,8 @@ public class RedisConfig extends CachingConfigurerSupport {
         // 开启默认类型信息（这样反序列化时就能还原成具体类型）
         mapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL);
 
-        // 在SetMealController#getDetail中会有问题 （因为那里有基础类型嵌套）
+
+        // 在SetMealController#getDetail中会有问题 （因为那里有基础类型嵌套）【我认为是取消了默认类型信息 后 缓存的问题】
         Jackson2JsonRedisSerializer<Object> redisSerializer = new Jackson2JsonRedisSerializer<>(Object.class);
         redisSerializer.setObjectMapper(mapper);
         return redisSerializer;
@@ -84,6 +85,9 @@ public class RedisConfig extends CachingConfigurerSupport {
 
     }
 
+
+
+    // @Bean("objRedisTemplate")
     /**
      * TODO:
      *     DishController中旧版手动管理的实现方式
@@ -91,28 +95,71 @@ public class RedisConfig extends CachingConfigurerSupport {
      * @return {@link RedisTemplate<Object,Object>}
      */
     @Bean
-    public RedisTemplate<Object, Object> redisTemplate(RedisConnectionFactory factory) {
+    @Primary     // 写了多个Bean推荐这么写
+    public RedisTemplate<Object, Object> objRedisTemplate(RedisConnectionFactory factory) {
         RedisTemplate<Object, Object> redisTemplate = new RedisTemplate<>();
         redisTemplate.setConnectionFactory(factory);
+
+        // 创建 ObjectMapper 并注册 JavaTimeModule
+        // ObjectMapper mapper = new ObjectMapper();
+        // mapper.registerModule(new JavaTimeModule());
+        // 开启默认类型信息（这样反序列化时就能还原成具体类型）
+        // mapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL);
+
+        // 设置 value 和 hashValue 使用 JSON 序列化
+        Jackson2JsonRedisSerializer<Object> serializer = new Jackson2JsonRedisSerializer<>(Object.class);
+        // serializer.setObjectMapper(mapper); // 关键步骤：注入带 JavaTimeModule 的 ObjectMapper
+        serializer.setObjectMapper(redisObjectMapper());
 
         // 设置 key 和 hashKey 使用 String 序列化
         redisTemplate.setKeySerializer(new StringRedisSerializer());
         redisTemplate.setHashKeySerializer(new StringRedisSerializer());
-
-        // 创建 ObjectMapper 并注册 JavaTimeModule
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-
-        // 设置 value 和 hashValue 使用 JSON 序列化
-        Jackson2JsonRedisSerializer<Object> serializer = new Jackson2JsonRedisSerializer<>(Object.class);
-        // 开启默认类型信息（这样反序列化时就能还原成具体类型）
-        mapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL);
-        serializer.setObjectMapper(mapper); // 关键步骤：注入带 JavaTimeModule 的 ObjectMapper
 
         redisTemplate.setValueSerializer(serializer);
         redisTemplate.setHashValueSerializer(serializer);
 
         redisTemplate.afterPropertiesSet();
         return redisTemplate;
+    }
+
+    /**
+     * TODO:
+     *     DishController中旧版手动管理的实现方式
+     * @param factory {@link RedisConnectionFactory}
+     * @return {@link RedisTemplate<String,Object>}
+     */
+    @Bean
+    public RedisTemplate<String, Object> strObjRedisTemplate(RedisConnectionFactory factory) {
+        RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
+        redisTemplate.setConnectionFactory(factory);
+
+        // 创建 ObjectMapper 并注册 JavaTimeModule
+        // ObjectMapper mapper = new ObjectMapper();
+        // mapper.registerModule(new JavaTimeModule());
+        // 开启默认类型信息（这样反序列化时就能还原成具体类型）
+        // mapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL);
+
+        // 设置 value 和 hashValue 使用 JSON 序列化
+        Jackson2JsonRedisSerializer<Object> serializer = new Jackson2JsonRedisSerializer<>(Object.class);
+        // serializer.setObjectMapper(mapper); // 关键步骤：注入带 JavaTimeModule 的 ObjectMapper
+        serializer.setObjectMapper(redisObjectMapper());
+
+        // 设置 key 和 hashKey 使用 String 序列化
+        redisTemplate.setKeySerializer(new StringRedisSerializer());
+        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
+
+        redisTemplate.setValueSerializer(serializer);
+        redisTemplate.setHashValueSerializer(serializer);
+
+        redisTemplate.afterPropertiesSet();
+        return redisTemplate;
+    }
+
+
+    public ObjectMapper redisObjectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        mapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL);
+        return mapper;
     }
 }

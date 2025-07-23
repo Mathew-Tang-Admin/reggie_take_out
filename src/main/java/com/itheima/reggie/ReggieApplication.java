@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 /**
  * @author MathewTang
  */
-@ServletComponentScan
+@ServletComponentScan   // 扫描并注册使用 @WebServlet、@WebFilter、@WebListener 注解的类。
 @Slf4j
 @SpringBootApplication
 @EnableTransactionManagement // 开启事务注解的支持

@@ -12,7 +12,7 @@ import com.itheima.reggie.entity.DishFlavor;
 import com.itheima.reggie.service.CategoryService;
 import com.itheima.reggie.service.DishFlavorService;
 import com.itheima.reggie.service.DishService;
-import com.itheima.reggie.utils.ConvertObjUtil;
+import com.itheima.reggie.utils.RedisUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
@@ -106,7 +106,7 @@ public class DishController {
         }
 
         // 缓存中有查到数据
-        dishDtoPage = ConvertObjUtil.convertObj(obj, Page.class);
+        dishDtoPage = RedisUtil.convertObj(obj, Page.class);
 
         return R.success(dishDtoPage);
     }

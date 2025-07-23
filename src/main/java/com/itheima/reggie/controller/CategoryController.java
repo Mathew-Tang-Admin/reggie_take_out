@@ -11,15 +11,26 @@ import com.itheima.reggie.entity.Setmeal;
 import com.itheima.reggie.service.CategoryService;
 import com.itheima.reggie.service.DishService;
 import com.itheima.reggie.service.SetMealService;
+import com.itheima.reggie.utils.RedisUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.redis.RedisSystemException;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.web.bind.annotation.*;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author MathewTang
@@ -35,11 +46,20 @@ public class CategoryController {
     @Autowired
     private DishService dishService;
 
+    @Autowired
+    private CacheManager cacheManager;
+
+    // private RedisTemplate redisTemplate;
+    // @Resource(name = "objRedisTemplate")
+    @Autowired
+    private RedisTemplate<Object, Object> redisTemplate;
+
 
     /**
      * TODO: 添加分类
      *     1:新增菜品, 2:套餐分类
-     *
+     *     删除移动端分类缓存、删除分页缓存、插入新的缓存
+     *     突然发现这里使用 @CachePut注解 即可  【脑壳抽了😂】
      * @param request  {@link HttpServletRequest}
      * @param category {@link Category}
      * @return {@link R<String>}
@@ -70,6 +90,16 @@ public class CategoryController {
         // category.setUpdateUser(empId);
         // log.info("新增分类，分类信息{}", category.toString());
         boolean flag = categoryService.save(category);
+        
+        // 删除page缓存
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, "categoryCache::page");
+        // 删除list缓存
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, "categoryCache::list");
+        // 新增分类缓存
+        redisTemplate.opsForValue().set("categoryCache::" + category.getId(), category, 60, TimeUnit.MINUTES);
+        // String key = "categoryCache::" + category.getId() + "";
+        // redisTemplate.opsForValue().set(key, category, 60, TimeUnit.MINUTES);
+
         return R.success("新增分类成功");
     }
 
@@ -80,6 +110,7 @@ public class CategoryController {
      * @param pageSize {@link Integer}
      * @return {@link R<Page>}
      */
+    @Cacheable(value = "categoryCache", key = "'page_' + #page + '_' + #pageSize")
     @GetMapping("/page")
     public R<Page<Category>> page(Integer page, Integer pageSize) {
         log.info("page = {},pageSize = {}", page, pageSize);
@@ -101,7 +132,7 @@ public class CategoryController {
 
     /**
      * TODO: 根据id修改分类信息
-     *
+     *     删除page缓存，list缓存，分类缓存
      * @return {@link R<String>}
      */
     @PutMapping
@@ -111,15 +142,27 @@ public class CategoryController {
         // 这里注意 公共字段 的更新
 
         categoryService.updateById(category);
+
+        String prefix = "categoryCache::";
+        // 删除page缓存
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate,prefix + "page");
+        // 删除list缓存
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate,prefix + "list");
+        // 删除分类缓存
+        redisTemplate.delete(prefix + category.getId());
+        // 增加新的缓存
+        redisTemplate.opsForValue().set(prefix + category.getId(), category, 60, TimeUnit.MINUTES);
+
         return R.success("分类信息修改成功");
     }
 
     /**
      * TODO: 根据id删除分类
-     *
+     *     删除page缓存、删除list缓存、删除分类缓存
      * @param id {@link Long}
      * @return {@link R<String>}
      */
+    @CacheEvict(value = "categoryCache", key = "#id")
     @DeleteMapping
     public R<String> delete(@RequestParam("id") Long id) {
         log.info("准备删除分类，id为：{}...", id);
@@ -159,6 +202,15 @@ public class CategoryController {
 
         // 改用全局异常处理
         categoryService.remove(id);
+
+        // 删除page缓存
+        String prefix = "categoryCache::";
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, prefix + "page");
+        // 删除list缓存
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, prefix + "list");
+        // 删除分类缓存
+        redisTemplate.delete(prefix + id);
+
         return R.success("分类信息删除成功");
 
     }
@@ -170,6 +222,7 @@ public class CategoryController {
      *
      * @return {@link R<String>}
      */
+    @Cacheable(value = "categoryCache", key = "'list_type_' + #category.type")
     @GetMapping("/list")
     public R<List<Category>> list(HttpServletRequest request, Category category) {
         log.info(" 根据分类类型查询分类 type:{}", category.getType());

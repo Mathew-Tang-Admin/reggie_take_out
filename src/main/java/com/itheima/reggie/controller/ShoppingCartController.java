@@ -7,13 +7,21 @@ import com.itheima.reggie.entity.ShoppingCart;
 import com.itheima.reggie.service.ShoppingCartService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpSession;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 /**
+ * TODO:    (mathewtang add 改用SpringCache)
  * @author MathewTang
  * @date 2025/06/28 16:17
  */
@@ -24,17 +32,21 @@ public class ShoppingCartController {
 
     @Autowired
     private ShoppingCartService shoppingCartService;
+    @Autowired
+    private CacheManager cacheManager;
+    @Autowired
+    private RedisTemplate<Object, Object> redisTemplate;
 
     /**
      * TODO: 查看购物车
-     *
+     *     这里/front/index.html L382、L241、L319的接受形式是数组，采用默认的json无法接受，因此修改了代码
      * @param session {@link HttpSession}
      * @return {@link R<List<ShoppingCart>>}
      */
-
+    @Cacheable(value = "shoppingCartCache", key = "'cart_list_' + #session.getAttribute('user').toString()")
     @GetMapping("/list")
     public R<List<ShoppingCart>> list(HttpSession session) {
-        log.info("查看购物车...");
+        log.info("查看购物车...");     // cart_list::user:
 
         // 这里我发现了一个问题，如果先登录管理员端，然后再登录移动端，上下文存储的是管理员的id，这个时候，这里是查不到移动端用户的购物车数据
 
@@ -49,6 +61,7 @@ public class ShoppingCartController {
         return R.success(list);
     }
 
+    @CacheEvict(value = "shoppingCartCache", key = "'cart_list_' + #session.getAttribute('user').toString()", beforeInvocation = true)
     @PostMapping("/add")
     public R<ShoppingCart> add(@RequestBody ShoppingCart shoppingCart, HttpSession session) {
         log.info("加入购物车，增加数量 shoppingCart={}...",shoppingCart);
@@ -78,6 +91,7 @@ public class ShoppingCartController {
 
     }
 
+    @CacheEvict(value = "shoppingCartCache", key = "'cart_list_' + #session.getAttribute('user').toString()", beforeInvocation = true)
     @PostMapping("/sub")
     public R<ShoppingCart> sub(@RequestBody ShoppingCart shoppingCart, HttpSession session) {
         Long userId = Long.parseLong(session.getAttribute("user").toString());
@@ -91,6 +105,7 @@ public class ShoppingCartController {
 
         ShoppingCart cart = shoppingCartService.getOne(queryWrapper);
         // 查询购物车里该商品 是否 > 1
+
         if (cart.getNumber() == 1) {
             shoppingCartService.remove(queryWrapper);
             return R.success(cart);
@@ -100,6 +115,7 @@ public class ShoppingCartController {
         return R.success(cart);
     }
 
+    @CacheEvict(value = "shoppingCartCache", key = "'cart_list_' + #session.getAttribute('user').toString()")
     @DeleteMapping("/clean")
     public R<String> clean(HttpSession session) {
         log.info("清空购物车 ...");
