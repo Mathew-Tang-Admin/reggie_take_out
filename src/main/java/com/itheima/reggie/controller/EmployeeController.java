@@ -8,6 +8,10 @@ import com.itheima.reggie.common.BaseContext;
 import com.itheima.reggie.common.R;
 import com.itheima.reggie.entity.Employee;
 import com.itheima.reggie.service.EmployeeService;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
+import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +37,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @RestController
 @RequestMapping("/employee")
+@Api(tags = "员工接口")
 public class EmployeeController {
     @Autowired
     private EmployeeService employeeService;
@@ -50,6 +55,7 @@ public class EmployeeController {
      * @return {@link R<Employee>}
      */
     @PostMapping("/login")
+    @ApiOperation(value = "员工登录接口")
     public R<Employee> login(HttpServletRequest request, @RequestBody Employee employee) {
         // 1、将页面提交的密码password进行md5加密处理
         String password = employee.getPassword();
@@ -88,6 +94,7 @@ public class EmployeeController {
      * @return {@link R<String>}
      */
     @PostMapping("/logout")
+    @ApiOperation(value = "员工退出接口")
     public R<String> logout(HttpServletRequest request) {
         // 清理Session中保存的当前登录员工的id
 
@@ -103,6 +110,7 @@ public class EmployeeController {
      * @return {@link R<String>}
      */
     @PostMapping
+    @ApiOperation(value = "新增员工接口")
     public R<String> save(HttpServletRequest request, @RequestBody Employee employee) {
         log.info("新增员工，员工信息{}", employee.toString());
         /* // 1. 查询要添加的username是否已存在【唯一约束】
@@ -163,9 +171,15 @@ public class EmployeeController {
      * @param name     {@link String}
      * @return {@link R<Page>}
      */
+    // public R<Page> page(@RequestParam("page") Integer page,
     @Cacheable(value = "employeeCache", key = "'page_' + #page + '_' + #pageSize + '_' + #name")
     @GetMapping("/page")
-    // public R<Page> page(@RequestParam("page") Integer page,
+    @ApiOperation(value = "员工分页接口")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "page", value = "页码", required = true),
+            @ApiImplicitParam(name = "pageSize", value = "每页记录数", required = true),
+            @ApiImplicitParam(name = "name", value = "员工姓名", required = false),
+    })
     public R<Page> page(Integer page, Integer pageSize, String name) {
         log.info("page = {},pageSize = {},name = {}", page, pageSize, name);
 
@@ -197,6 +211,7 @@ public class EmployeeController {
             }
     )
     @PutMapping
+    @ApiOperation(value = "更新员工接口")
     public R<String> update(HttpServletRequest request, @RequestBody Employee employee) {
         long threadId = Thread.currentThread().getId();
 
@@ -240,7 +255,11 @@ public class EmployeeController {
      */
     // @Cacheable(value = "cacheManager", key = "'detail_' + #id")       // 为了统一结构，只能手动实现
     @GetMapping("/{id}")
-    public R<Employee> employee(@PathVariable("id") Long id) {
+    @ApiOperation(value = "查询员工详情接口")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "id",value = "员工id", required = true),
+    })
+    public R<Employee> getDetail(@PathVariable("id") Long id) {
         log.info("根据id查询员工详细信息...");
 
         // 获取缓存数据

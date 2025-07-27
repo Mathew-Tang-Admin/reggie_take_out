@@ -5,6 +5,10 @@ import com.itheima.reggie.common.BaseContext;
 import com.itheima.reggie.common.R;
 import com.itheima.reggie.entity.ShoppingCart;
 import com.itheima.reggie.service.ShoppingCartService;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
+import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
@@ -28,6 +32,7 @@ import java.util.List;
 @Slf4j
 @RequestMapping("/shoppingCart")
 @RestController
+@Api(tags = "购物车接口")
 public class ShoppingCartController {
 
     @Autowired
@@ -45,6 +50,7 @@ public class ShoppingCartController {
      */
     @Cacheable(value = "shoppingCartCache", key = "'cart_list_' + #session.getAttribute('user').toString()")
     @GetMapping("/list")
+    @ApiOperation(value = "购物车列表接口")
     public R<List<ShoppingCart>> list(HttpSession session) {
         log.info("查看购物车...");     // cart_list::user:
 
@@ -63,6 +69,7 @@ public class ShoppingCartController {
 
     @CacheEvict(value = "shoppingCartCache", key = "'cart_list_' + #session.getAttribute('user').toString()", beforeInvocation = true)
     @PostMapping("/add")
+    @ApiOperation(value = "加入购物车接口")
     public R<ShoppingCart> add(@RequestBody ShoppingCart shoppingCart, HttpSession session) {
         log.info("加入购物车，增加数量 shoppingCart={}...",shoppingCart);
 
@@ -93,6 +100,7 @@ public class ShoppingCartController {
 
     @CacheEvict(value = "shoppingCartCache", key = "'cart_list_' + #session.getAttribute('user').toString()", beforeInvocation = true)
     @PostMapping("/sub")
+    @ApiOperation(value = "减少或移出购物车接口")
     public R<ShoppingCart> sub(@RequestBody ShoppingCart shoppingCart, HttpSession session) {
         Long userId = Long.parseLong(session.getAttribute("user").toString());
         log.info("购物车，减少数量 shoppingCart={} BaseContextUserId={}, sessionUserId={}...",shoppingCart, BaseContext.getCurrentId(), userId);
@@ -117,6 +125,7 @@ public class ShoppingCartController {
 
     @CacheEvict(value = "shoppingCartCache", key = "'cart_list_' + #session.getAttribute('user').toString()")
     @DeleteMapping("/clean")
+    @ApiOperation(value = "清空购物车接口")
     public R<String> clean(HttpSession session) {
         log.info("清空购物车 ...");
         Long userId = Long.parseLong(session.getAttribute("user").toString());

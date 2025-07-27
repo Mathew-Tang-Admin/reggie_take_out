@@ -13,6 +13,10 @@ import com.itheima.reggie.service.CategoryService;
 import com.itheima.reggie.service.DishFlavorService;
 import com.itheima.reggie.service.DishService;
 import com.itheima.reggie.utils.RedisUtil;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
+import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
@@ -32,6 +36,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestController
 @RequestMapping("/dish")
+@Api(tags = "菜品接口")
 public class DishController {
     @Autowired
     private DishService dishService;
@@ -53,6 +58,12 @@ public class DishController {
      * @return {@link R<Page<DishDto>>}
      */
     @GetMapping("/page")
+    @ApiOperation(value = "菜品分页接口")
+    /* @ApiImplicitParams({
+            @ApiImplicitParam(name = "name",value = "菜品名称", required = false),
+            @ApiImplicitParam(name = "page",value = "页码", required = true),
+            @ApiImplicitParam(name = "pageSize",value = "每页记录数", required = true),
+    }) */
     public R<Page<DishDto>> page(String name, Integer page, Integer pageSize) {
         log.info("菜品 分页查询 page={},pageSize={}",page, pageSize);
 
@@ -118,6 +129,10 @@ public class DishController {
      * @return {@link R<DishDto>}
      */
     @GetMapping("/{id}")
+    @ApiOperation(value = "查询菜品详情接口")
+    /* @ApiImplicitParams({
+            @ApiImplicitParam(name = "id",value = "菜品id", required = true),
+    }) */
     public R<DishDto> getDetail(@PathVariable("id") Long id) {
         log.info("根据id 查询菜品详细信息id={}",id);
 
@@ -136,6 +151,11 @@ public class DishController {
      * @return {@link R<String>}
      */
     @PostMapping("/status/{status}")
+    @ApiOperation(value = "修改菜品状态接口")
+    /* @ApiImplicitParams({
+            @ApiImplicitParam(name = "status",value = "状态", required = true),
+            @ApiImplicitParam(name = "ids",value = "菜品id，逗号分割", required = true),
+    }) */
     public R<String> status(@PathVariable("status") Integer status, String ids) {
         log.info("根据id 批量修改菜品状态，ids={},status={}",ids,status);
 
@@ -187,8 +207,12 @@ public class DishController {
      * @param ids {@link String}
      * @return {@link R<String>}
      */
-    @DeleteMapping
     // public R<String> delete(String ids) {
+    @DeleteMapping
+    @ApiOperation(value = "删除菜品接口")
+    /* @ApiImplicitParams({
+            @ApiImplicitParam(name = "id",value = "菜品id，逗号分割", required = true),
+    }) */
     public R<String> delete(@RequestParam("ids") List<Long> ids) {
         log.info("根据id 批量删除菜品，ids={}",ids);
 
@@ -204,6 +228,7 @@ public class DishController {
      * @return {@link R<String>}
      */
     @PostMapping
+    @ApiOperation(value = "新增菜品接口")
     public R<String> save(@RequestBody DishDto dishDto) {
         log.info("添加菜品, dishDto={}",dishDto);
 
@@ -224,6 +249,7 @@ public class DishController {
      * @return {@link R<String>}
      */
     @PutMapping
+    @ApiOperation(value = "修改菜品接口")
     public R<String> update(@RequestBody DishDto dishDto) {
         log.info("修改菜品, dishDto={}",dishDto);
 
@@ -267,6 +293,7 @@ public class DishController {
      * @return {@link R<List<DishDto>>}
      */
     @GetMapping("/list")
+    @ApiOperation(value = "根据分类id查询菜品接口")
     public R<List<DishDto>> list(Dish dish) {
         log.info("根据条件（分类id） 查询菜品, categoryId={}",dish.getCategoryId());
 

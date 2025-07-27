@@ -8,6 +8,10 @@ import com.itheima.reggie.entity.AddressBook;
 import com.itheima.reggie.entity.ShoppingCart;
 import com.itheima.reggie.service.AddressBookService;
 import com.itheima.reggie.utils.RedisUtil;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
+import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.Cache;
@@ -33,6 +37,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @RequestMapping("/addressBook")
 @RestController
+@Api(tags = "地址簿接口")
 public class AddressBookController {
 
     @Autowired
@@ -53,6 +58,7 @@ public class AddressBookController {
      */
     @CachePut(value = "addressBookCache",key = "'detail_' + #addressBook.id")
     @PostMapping
+    @ApiOperation(value = "新增地址接口")
     public R<AddressBook> save(@RequestBody AddressBook addressBook, HttpSession session) {
         log.info("AddressBook.save AddressBook={} ...",addressBook);
         // addressBook.setUserId(Long.parseLong(session.getAttribute("user").toString()));
@@ -111,6 +117,7 @@ public class AddressBookController {
             }
     )
     @PutMapping("/default")
+    @ApiOperation(value = "设置默认地址接口")
     public R<AddressBook> setDefault(@RequestBody AddressBook addressBook, HttpSession session) {
         log.info("AddressBook.default 设置默认地址 AddressBook={} ...",addressBook);
         LambdaUpdateWrapper<AddressBook> updateWrapper = new LambdaUpdateWrapper<>();
@@ -137,6 +144,7 @@ public class AddressBookController {
      */
     @Cacheable(value = "addressBookCache", key = "'default'")
     @GetMapping("/default")
+    @ApiOperation(value = "获取默认地址接口")
     public R<AddressBook> getDefault(HttpSession session) {
         log.info("查询默认地址 ...");
 
@@ -162,6 +170,7 @@ public class AddressBookController {
      */
     @Cacheable(value = "addressBookCache", key = "'list_user_' + #session.getAttribute('user').toString()")
     @GetMapping("/list")
+    @ApiOperation(value = "查询所有地址接口")
     public R<List<AddressBook>> list(AddressBook addressBook, HttpSession session) {
         log.info("查询 指定用户所有地址信息 ...");
         LambdaQueryWrapper<AddressBook> queryWrapper = new LambdaQueryWrapper<>();
@@ -184,6 +193,11 @@ public class AddressBookController {
      */
     @Cacheable(value = "addressBookCache", key = "'detail_' + #id")
     @GetMapping("/{id}")
+    @ApiOperation(value = "查询地址详情接口")
+    /* @ApiImplicitParams({
+            @ApiImplicitParam(name = "id",value = "地址簿id", required = true),
+            @ApiImplicitParam(name = "session",value = "session", required = false),
+    }) */
     public R<AddressBook> getDetail(@PathVariable("id") Long id,HttpSession session) {
         log.info("根据id 查询地址详细信息 id={} ...",id);
         LambdaQueryWrapper<AddressBook> queryWrapper = new LambdaQueryWrapper<>();
@@ -209,6 +223,7 @@ public class AddressBookController {
             put = {@CachePut(value = "addressBookCache", key = "'detail_' + #addressBook.id")}
     )
     @PutMapping
+    @ApiOperation(value = "更新地址接口")
     public R<AddressBook> update(@RequestBody AddressBook addressBook,HttpSession session) {
         log.info("更新地址详细信息 addressBook={} ...",addressBook);
 
@@ -230,6 +245,11 @@ public class AddressBookController {
                     @CacheEvict(value = "addressBookCache", key = "'default'"),}
     )
     @DeleteMapping
+    @ApiOperation(value = "删除地址接口")
+    /* @ApiImplicitParams({
+            @ApiImplicitParam(name = "ids",value = "地址簿id", required = true),
+            @ApiImplicitParam(name = "session",value = "session", required = false),
+    }) */
     public R<String> delete(Long ids, HttpSession session) {
         log.info("删除单个地址信息 ids={} ...",ids);
 

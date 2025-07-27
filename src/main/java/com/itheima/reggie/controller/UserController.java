@@ -7,6 +7,10 @@ import com.itheima.reggie.entity.User;
 import com.itheima.reggie.service.UserService;
 import com.itheima.reggie.utils.SMSUtils;
 import com.itheima.reggie.utils.ValidateCodeUtils;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
+import io.swagger.annotations.ApiOperation;
 import lombok.extern.java.Log;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
@@ -30,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @RestController
 @RequestMapping("/user")
+@Api(tags = "用户接口")
 public class UserController {
 
     @Autowired
@@ -46,6 +51,7 @@ public class UserController {
      * @return {@link R<String>}
      */
     @PostMapping("/sendMsg")
+    @ApiOperation(value = "用户发送短信接口")
     public R<String> sendMsg(@RequestBody User user, HttpSession session) {
         // 目前个人无法开启 阿里云 短信发送服务
 
@@ -86,8 +92,14 @@ public class UserController {
      * @param session {@link String>}
      * @return {@link R<User>}
      */
-    @PostMapping("/login")
     // public R<String> login(@RequestBody User user, HttpSession session) {
+    @PostMapping("/login")
+    @ApiOperation(value = "用户登录接口")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "map",value = "map包含 phone、code", required = true),
+            // @ApiImplicitParam(name = "phone",value = "手机号", paramType = "query", required = true),
+            // @ApiImplicitParam(name = "code",value = "验证码", paramType = "query", required = true),
+    })
     public R<User> login(@RequestBody Map<String, String> map, HttpSession session) {
         // log.info("移动端手机登录，手机号={}, code={}...", user.getPhone(), user.getCode());
         // String sessionCode = (String) session.getAttribute(user.getPhone());
@@ -130,6 +142,7 @@ public class UserController {
     }
 
     @PostMapping("/loginout")
+    @ApiOperation(value = "用户登出接口")
     public R<String> loginout(HttpSession session) {
         // 清理Session中保存的当前登录用户的id
 

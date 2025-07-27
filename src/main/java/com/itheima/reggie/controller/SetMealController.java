@@ -10,6 +10,10 @@ import com.itheima.reggie.service.CategoryService;
 import com.itheima.reggie.service.DishService;
 import com.itheima.reggie.service.SetMealDishService;
 import com.itheima.reggie.service.SetMealService;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
+import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
@@ -37,6 +41,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestController
 @RequestMapping("/setmeal")
+@Api(tags = "套餐相关接口")
 public class SetMealController {
 
     @Autowired
@@ -66,6 +71,12 @@ public class SetMealController {
      */
     @Cacheable(value = "setMealCache", key = "'page_' + #page + '_' + #pageSize + '_' + #name")
     @GetMapping("/page")
+    @ApiOperation(value = "套餐分页接口")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "page",value = "页码", required = true),
+            @ApiImplicitParam(name = "pageSize",value = "每页记录数", required = true),
+            @ApiImplicitParam(name = "name",value = "套餐名称", required = false),
+    })
     public R<Page<SetmealDto>> page(Integer page, Integer pageSize, String name) {
         log.info("套餐分页查询，page={},pageSize={}", page, pageSize);
 
@@ -112,8 +123,13 @@ public class SetMealController {
      * @param ids {@link String}
      * @return {@link R<String>}
      */
-    @PostMapping("/status/{status}")
     // public R<String> status(@PathVariable("status") Integer status, String ids) {
+    @PostMapping("/status/{status}")
+    @ApiOperation(value = "修改套餐状态接口")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "status",value = "状态", paramType = "path", required = true),
+            @ApiImplicitParam(name = "ids",value = "套餐id，逗号分割", required = true),
+    })
     public R<String> status(@PathVariable("status") Integer status, @RequestParam("ids") List<Long> ids) {
         log.info("根据id 批量修改套餐状态，ids={},status={}",ids,status);
 
@@ -164,8 +180,12 @@ public class SetMealController {
      * @return {@link R<String>}
      */
     // @CacheEvict(value = "setMealCache", allEntries = true)   // 老师是这么实现的
-    @DeleteMapping
     // public R<String> delete(String ids) {
+    @DeleteMapping
+    @ApiOperation(value = "删除套餐接口")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "ids",value = "套餐id，逗号分割", required = true),
+    })
     public R<String> delete(@RequestParam("ids") List<Long> ids) {
         log.info("根据id 批量删除套餐，ids={}",ids);
 
@@ -220,6 +240,7 @@ public class SetMealController {
             }
     )
     @PostMapping
+    @ApiOperation(value = "新增套餐接口")
     public R<String> save(@RequestBody SetmealDto setmealDto) {
         log.info("添加套餐 并添加关联的菜品关系，setmealDto={}",setmealDto);
 
@@ -250,6 +271,10 @@ public class SetMealController {
      */
     @Cacheable(value = "setMealCache", key = "#id")
     @GetMapping("{id}")
+    @ApiOperation(value = "获取套餐详情接口")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "id",value = "套餐id", required = true),
+    })
     public R<SetmealDto> getDetail(@PathVariable("id") Long id) {
         log.info("根据id查询 套餐详细信息 以及关联的菜品关系，id={}",id);
 
@@ -275,6 +300,7 @@ public class SetMealController {
             } // , beforeInvocation = true
     )
     @PutMapping
+    @ApiOperation(value = "更新套餐接口")
     public R<String> update(@RequestBody SetmealDto setmealDto) {
         log.info("更新 套餐详细信息 以及关联的菜品关系，setmealDto={}",setmealDto);
 
@@ -304,6 +330,7 @@ public class SetMealController {
      */
     @Cacheable(value = "setMealCache", key = "'list_'+ #setmeal.categoryId + '_' + #setmeal.status")
     @GetMapping("list")
+    @ApiOperation(value = "根据条件（分类id）查询 已售套餐接口")
     // public R<List<Setmeal>> list(@RequestParam("categoryId") Long categoryId, @RequestParam("status") Integer status) {
     public R<List<Setmeal>> list(Setmeal setmeal) {
         Long categoryId = setmeal.getCategoryId();
@@ -330,6 +357,10 @@ public class SetMealController {
      */
     @Cacheable(value = "setMealCache", key = "#id + '_contain_dish'")
     @GetMapping("/dish/{id}")
+    @ApiOperation(value = "根据 套餐id 查询包含的菜品接口")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "id",value = "套餐id", required = true),
+    })
     public R<List<Dish>> list(@PathVariable("id") Long id) {
         log.info("根据 套餐id 查询包含的菜品，id={}",id);
 

@@ -12,6 +12,10 @@ import com.itheima.reggie.service.CategoryService;
 import com.itheima.reggie.service.DishService;
 import com.itheima.reggie.service.SetMealService;
 import com.itheima.reggie.utils.RedisUtil;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiImplicitParam;
+import io.swagger.annotations.ApiImplicitParams;
+import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +42,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @RestController
 @RequestMapping("/category")
+@Api(tags = "分类接口")
 public class CategoryController {
     @Autowired
     private CategoryService categoryService;
@@ -65,6 +70,7 @@ public class CategoryController {
      * @return {@link R<String>}
      */
     @PostMapping
+    @ApiOperation(value = "新增分类接口")
     public R<String> save(HttpServletRequest request, @RequestBody Category category) {
         log.info("新增分类，分类信息{}", category.toString());
 
@@ -112,6 +118,11 @@ public class CategoryController {
      */
     @Cacheable(value = "categoryCache", key = "'page_' + #page + '_' + #pageSize")
     @GetMapping("/page")
+    @ApiOperation(value = "分类分页接口")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "page",value = "页码", dataTypeClass = Integer.class, required = true),
+            @ApiImplicitParam(name = "pageSize",value = "每页记录数", dataTypeClass = Integer.class, required = true),
+    })
     public R<Page<Category>> page(Integer page, Integer pageSize) {
         log.info("page = {},pageSize = {}", page, pageSize);
 
@@ -136,6 +147,7 @@ public class CategoryController {
      * @return {@link R<String>}
      */
     @PutMapping
+    @ApiOperation(value = "更新分类接口")
     public R<String> update(HttpServletRequest request, @RequestBody Category category) {
         log.info(" 员工信息修改 category:{}", category);
 
@@ -164,6 +176,10 @@ public class CategoryController {
      */
     @CacheEvict(value = "categoryCache", key = "#id")
     @DeleteMapping
+    @ApiOperation(value = "删除分类接口")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "id",value = "分类id", dataTypeClass = Long.class, required = true),
+    })
     public R<String> delete(@RequestParam("id") Long id) {
         log.info("准备删除分类，id为：{}...", id);
 
@@ -224,6 +240,7 @@ public class CategoryController {
      */
     @Cacheable(value = "categoryCache", key = "'list_type_' + #category.type")
     @GetMapping("/list")
+    @ApiOperation(value = "根据分类类型查询分类接口")
     public R<List<Category>> list(HttpServletRequest request, Category category) {
         log.info(" 根据分类类型查询分类 type:{}", category.getType());
 

@@ -4,6 +4,8 @@ import com.itheima.reggie.entity.Dish;
 import com.itheima.reggie.entity.DishFlavor;
 import com.itheima.reggie.entity.OrderDetail;
 import com.itheima.reggie.entity.Orders;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -17,11 +19,13 @@ import java.util.List;
  * @author Administrator
  */
 @Data
+@ApiModel("订单DTO")
 public class OrderDto extends Orders {
 
     private List<OrderDetail> orderDetails = new ArrayList<>();
 
     /** 商品总量 */
+    @ApiModelProperty("商品总量")
     private Integer sumNum;
 
 }
