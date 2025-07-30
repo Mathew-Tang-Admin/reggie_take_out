@@ -8,6 +8,7 @@ import com.itheima.reggie.common.BaseContext;
 import com.itheima.reggie.common.R;
 import com.itheima.reggie.entity.Employee;
 import com.itheima.reggie.service.EmployeeService;
+import com.itheima.reggie.utils.RedisUtil;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiImplicitParam;
 import io.swagger.annotations.ApiImplicitParams;
@@ -105,7 +106,7 @@ public class EmployeeController {
     /**
      * TODO: 添加员工
      *     删除分页缓存、增加新的缓存          如果为了实现更加简单可以只是用 id 作为key
-     *     突然发现这里使用 @CachePut注解 即可  【脑壳抽了😂】
+     *     突然发现这里使用 @CachePut注解 即可，不行，不管什么注解？都是方法返回值加入缓存
      * @param request {@link HttpServletRequest}
      * @return {@link R<String>}
      */
@@ -149,6 +150,7 @@ public class EmployeeController {
         System.out.println("employee.getId() = " + employee.getId());
 
         // 删除分页缓存
+        // RedisUtil.deleteKeysByPrefixAsync(redisTemplate, "employeeCache::page");
         String prefix= "employeeCache::";
         Set<Object> pageKeys = redisTemplate.keys(prefix + "page*");
         if (pageKeys != null) {

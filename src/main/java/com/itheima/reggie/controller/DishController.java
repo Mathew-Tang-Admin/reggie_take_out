@@ -51,7 +51,7 @@ public class DishController {
 
     /**
      * TODO: 菜品 分页查询（改用Redis缓存，mathewtang add）
-     *
+     *     page缓存
      * @param name {@link String}
      * @param page {@link Integer}
      * @param pageSize {@link Integer}
@@ -68,7 +68,7 @@ public class DishController {
         log.info("菜品 分页查询 page={},pageSize={}",page, pageSize);
 
         // 从Redis缓存中获取 菜品分页 信息
-        String key = RedisConstant.DISH_PAGE + "_" + page + "_" + pageSize;
+        String key = RedisConstant.DISH_PAGE + "_" + page + "_" + pageSize + "_" + name;
         Object obj = redisTemplate.opsForValue().get(key);
         Page<DishDto> dishDtoPage = null;
 
@@ -124,7 +124,7 @@ public class DishController {
 
     /**
      * TODO: 根据id查询 菜品详细信息 和对应 口味信息（改用Redis缓存）
-     *
+     *     dish_detail缓存
      * @param id {@link String} 菜品id
      * @return {@link R<DishDto>}
      */
@@ -145,7 +145,7 @@ public class DishController {
 
     /**
      * TODO: 批量修改菜品状态（改用Redis缓存，mathewtang add）
-     *
+     *     删除page缓存、删除list缓存、删除detail缓存
      * @param status {@link Integer}
      * @param ids {@link String}
      * @return {@link R<String>}
@@ -156,7 +156,7 @@ public class DishController {
             @ApiImplicitParam(name = "status",value = "状态", required = true),
             @ApiImplicitParam(name = "ids",value = "菜品id，逗号分割", required = true),
     }) */
-    public R<String> status(@PathVariable("status") Integer status, String ids) {
+    public R<String> status(@PathVariable("status") Integer status, String ids) { // @RequestParam("ids") List<Long> ids
         log.info("根据id 批量修改菜品状态，ids={},status={}",ids,status);
 
         /* String[] idsStr = ids.split(",");
@@ -189,9 +189,14 @@ public class DishController {
                                 .set(Dish::getStatus, status);
         dishService.update(updateWrapper);
 
-        // 删除Redis缓存中旧的数据
+        // 删除page缓存
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, RedisConstant.DISH_PAGE);
+        // 删除list缓存
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, "dish_list");
+        // 删除detail缓存
+        String prefix = RedisConstant.DISH_DETAIL + "_";
         for (String id : idsList) {
-            String key = RedisConstant.DISH_DETAIL + "_" + id;
+            String key = prefix + id;
             Object obj = redisTemplate.opsForValue().get(key);
             if (null != obj) {
                 redisTemplate.delete(key);
@@ -203,7 +208,7 @@ public class DishController {
 
     /**
      * TODO: 批量删除菜品 以及菜品口味（改用Redis缓存，mathewtang add）
-     *
+     *     删除page缓存、删除list缓存、删除detail缓存
      * @param ids {@link String}
      * @return {@link R<String>}
      */
@@ -223,7 +228,7 @@ public class DishController {
 
     /**
      * TODO: 添加菜品（改用Redis缓存）
-     *
+     *     删除page缓存、删除list缓存、增加detail缓存
      * @param dishDto {@link DishDto}
      * @return {@link R<String>}
      */
@@ -234,17 +239,20 @@ public class DishController {
 
         dishService.saveWithFlavor(dishDto);
 
-        // 删除缓存中旧的数据
-        String keys = "dish_" + + dishDto.getCategoryId() + "_1";
-        // String keys = redisTemplate.keys("dish_*").toString();
+        // 删除page缓存
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, RedisConstant.DISH_PAGE);
+        // 删除list缓存
+        String keys = "dish_list_" + + dishDto.getCategoryId() + "_1";
         redisTemplate.delete(keys);
+        // 增加detail缓存
+        redisTemplate.opsForValue().set(RedisConstant.DISH_DETAIL + "_" + dishDto.getId(), dishDto, 60, TimeUnit.MINUTES);
 
         return R.success("添加菜品成功");
     }
 
     /**
      * TODO: 更新菜品（改用Redis缓存）
-     *
+     *     删除page缓存、删除list缓存、删除detail缓存，更新detail缓冲流
      * @param dishDto {@link DishDto}
      * @return {@link R<String>}
      */
@@ -255,10 +263,13 @@ public class DishController {
 
         dishService.updateWithFlavor(dishDto);
 
-        // 删除缓存中旧的数据
-        String keys = "dish_" + + dishDto.getCategoryId() + "_1";
-        // String keys = redisTemplate.keys("dish_*").toString();
+        // 删除page缓存
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, RedisConstant.DISH_PAGE);
+        // 删除list缓存
+        String keys = "dish_list" + + dishDto.getCategoryId() + "_1";
         redisTemplate.delete(keys);
+        // 更新detail缓存
+        redisTemplate.opsForValue().set(RedisConstant.DISH_DETAIL + "_" + dishDto.getId(), dishDto, 60, TimeUnit.MINUTES);
 
         return R.success("修改菜品成功");
     }
@@ -288,7 +299,7 @@ public class DishController {
 
     /**
      * TODO: 根据条件（分类id） 查询菜品（改用Redis缓存）
-     *
+     *     list缓存
      * @param dish {@link Dish}
      * @return {@link R<List<DishDto>>}
      */
@@ -297,7 +308,7 @@ public class DishController {
     public R<List<DishDto>> list(Dish dish) {
         log.info("根据条件（分类id） 查询菜品, categoryId={}",dish.getCategoryId());
 
-        String key = "dish_" + dish.getCategoryId() + "_" + dish.getStatus();
+        String key = "dish_list_" + dish.getCategoryId() + "_" + dish.getStatus();
         List<DishDto> dishDtos = null;
 
         // 根据条件（分类id）从Redis缓存中获取菜品信息

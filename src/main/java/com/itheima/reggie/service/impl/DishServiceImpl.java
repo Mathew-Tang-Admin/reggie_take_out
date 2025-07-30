@@ -207,16 +207,26 @@ public class DishServiceImpl extends ServiceImpl<DishMapper, Dish> implements Di
         queryWrapper.in(DishFlavor::getDishId, ids);
         boolean removeFlavor = dishFlavorService.remove(queryWrapper);
 
-        // 删除缓存中分类商品，以及菜品详情
-        for (Dish dish : dishList) {
+        // 删除缓存中分类商品，以及菜品详情【不能这么做，能执行到这里，一定list.size() == 0】
+        /* for (Dish dish : dishList) {
             // 删除菜品分类
-            String categoryKey = "dish_" + dish.getCategoryId() + "_1";
+            String categoryKey = "dish_list_" + dish.getCategoryId() + "_1";
             Object o = redisTemplate.opsForValue().get(categoryKey);
             if (null != o) {
                 redisTemplate.delete(categoryKey);
             }
             // 删除菜品详情
             String dishKey = RedisConstant.DISH_DETAIL + "_" + dish.getId();
+            redisTemplate.delete(dishKey);
+        } */
+
+
+        // 删除page缓存
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, RedisConstant.DISH_PAGE);
+        // 删除list缓存
+        RedisUtil.deleteKeysByPrefixAsync(redisTemplate, "dish_list");
+        for (Long id : ids) {
+            String dishKey = RedisConstant.DISH_DETAIL + "_" + id;
             redisTemplate.delete(dishKey);
         }
 
